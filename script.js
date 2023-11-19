@@ -22,8 +22,8 @@ const account1 = {
     '2020-04-01T10:17:24.185Z',
     '2020-05-08T14:11:59.604Z',
     '2020-05-27T17:01:17.194Z',
-    '2020-07-11T23:36:17.929Z',
-    '2020-07-12T10:51:36.790Z',
+    '2023-11-17T23:36:17.929Z',
+    '2023-11-18T10:51:36.790Z',
   ],
   currency: 'EUR',
   locale: 'pt-PT', // de-DE
@@ -48,8 +48,27 @@ const account2 = {
   currency: 'USD',
   locale: 'en-US',
 };
+const account3 = {
+  owner: 'Abbas Gure',
+  movements: [5120, 34100, -1150, -7290, -3210, -13000, 85200, -30],
+  interestRate: 0.1,
+  pin: 3333,
 
-const accounts = [account1, account2];
+  movementsDates: [
+    '2019-11-01T13:15:33.035Z',
+    '2019-11-30T09:48:16.867Z',
+    '2019-12-25T06:04:23.907Z',
+    '2020-01-25T14:18:46.235Z',
+    '2020-02-05T16:33:06.386Z',
+    '2020-04-10T14:43:26.374Z',
+    '2023-11-17T23:36:17.929Z',
+    '2023-11-18T10:51:36.790Z',
+  ],
+  currency: 'SAR',
+  locale: 'ar-eg',
+};
+
+const accounts = [account1, account2, account3];
 
 /////////////////////////////////////////////////
 // Elements
@@ -81,6 +100,30 @@ const inputClosePin = document.querySelector('.form__input--pin');
 /////////////////////////////////////////////////
 // Functions
 
+const formatMovementDates = (date, locale) => {
+  //method to calculate number of days passed in whole number
+  const calcDaysPassed = (day1, day2) =>
+    //1000ms in one second, 60 sec in one min, 60 min in one hr, 24 hr in a day
+    Math.round(Math.abs(day2 - day1) / (1000 * 60 * 60 * 24));
+
+  //pass day 2 and day 1 dates into method and assign to value
+  const daysPassed = calcDaysPassed(new Date(), date);
+  // console.log(daysPassed);
+
+  if (daysPassed === 0) return 'Today';
+  if (daysPassed === 1) return 'Yesterday';
+  if (daysPassed <= 7 && daysPassed > 1) return `${daysPassed} days ago`;
+  else {
+    // const day = `${date.getDate()}`.padStart(2, '0'); //Padstart used when day number is less than 10, pad number with 0 at the front
+    // const month = `${date.getMonth() + 1}`.padStart(2, '0'); //same thing here
+    // const year = date.getFullYear();
+
+    // return `${day}/${month}/${year}`;
+
+    return new Intl.DateTimeFormat(locale).format(date);
+  }
+};
+
 const displayMovements = function (acc, sort = false) {
   containerMovements.innerHTML = '';
 
@@ -92,15 +135,12 @@ const displayMovements = function (acc, sort = false) {
     const type = mov > 0 ? 'deposit' : 'withdrawal';
 
     const currDate = new Date(acc.movementsDates[i]);
-    const day = `${currDate.getDate()}`.padStart(2, '0'); //Padstart used when day number is less than 10, pad number with 0 at the front
-    const month = `${currDate.getMonth() + 1}`.padStart(2, '0'); //same thing here
-    const year = currDate.getFullYear();
-    const hour = `${currDate.getHours()}`.padStart(2, '0');
-    const min = `${currDate.getMinutes()}`.padStart(2, '0');
 
     //format we want Day/Month/Year
 
-    const displayDate = `${day}/${month}/${year}`;
+    const displayDate = formatMovementDates(currDate, acc.locale);
+
+    const formattedMovements = formatCurrency(mov, acc.locale, acc.currency);
 
     const html = `
       <div class="movements__row">
@@ -108,29 +148,44 @@ const displayMovements = function (acc, sort = false) {
       i + 1
     } ${type}</div>
     <div class="movements__date">${displayDate}</div>
-        <div class="movements__value">${mov.toFixed(2)}€</div>
+        <div class="movements__value">${formattedMovements}</div>
       </div>
     `;
 
     containerMovements.insertAdjacentHTML('afterbegin', html);
   });
 };
-
+const formatCurrency = (val, locale, curr) => {
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: curr,
+  }).format(val);
+};
 const calcDisplayBalance = function (acc) {
   acc.balance = acc.movements.reduce((acc, mov) => acc + mov, 0);
-  labelBalance.textContent = `${acc.balance.toFixed(2)}€`;
+
+  labelBalance.textContent = formatCurrency(
+    acc.balance,
+    acc.locale,
+    acc.currency
+  );
 };
 
 const calcDisplaySummary = function (acc) {
   const incomes = acc.movements
     .filter(mov => mov > 0)
     .reduce((acc, mov) => acc + mov, 0);
-  labelSumIn.textContent = `${incomes.toFixed(2)}€`;
+  labelSumIn.textContent = formatCurrency(incomes, acc.locale, acc.currency);
+  // labelSumIn.textContent = `${incomes.toFixed(2)}€`;
 
   const out = acc.movements
     .filter(mov => mov < 0)
     .reduce((acc, mov) => acc + mov, 0);
-  labelSumOut.textContent = `${Math.abs(out).toFixed(2)}€`;
+  labelSumOut.textContent = formatCurrency(
+    Math.abs(out),
+    acc.locale,
+    acc.currency
+  );
 
   const interest = acc.movements
     .filter(mov => mov > 0)
@@ -140,7 +195,11 @@ const calcDisplaySummary = function (acc) {
       return int >= 1;
     })
     .reduce((acc, int) => acc + int, 0);
-  labelSumInterest.textContent = `${interest.toFixed(2)}€`;
+  labelSumInterest.textContent = formatCurrency(
+    interest,
+    acc.locale,
+    acc.currency
+  );
 };
 
 const createUsernames = function (accs) {
@@ -166,14 +225,48 @@ const updateUI = function (acc) {
 };
 
 ///////////////////////////////////////
-// Event handlers
-let currentAccount;
+//Setting up Logout Timer
+const startLogoutTimer = () => {
+  const tiktok = () => {
+    const min = String(Math.trunc(time / 60)).padStart(2, 0);
+    const secs = String(time % 60).padStart(2, 0);
+    //with each callback call print the remaining time in the UI
+    labelTimer.textContent = `${min}:${secs}`;
+
+    //when time reaches 0
+    if (time === 0) {
+      //when we reach 0 seconds, stop timer and log out user
+      clearInterval(timer);
+      labelWelcome.textContent = `Log in to get started`;
+      containerApp.style.opacity = 0;
+    }
+
+    //decrease time
+    time--;
+  };
+  //Set time to 5 mins
+  let time = 600;
+  tiktok();
+  //Call timer every second (1000ms)
+  const timer = setInterval(tiktok, 1000);
+
+  return timer;
+  
+};
+
+///////////////////////////////////////
+// Event handlers , timer is set to global variable so when people log into another account it can be reset
+let currentAccount, timer;
 
 //Lets fake being logged in for now so we can edit easier
-currentAccount = account1;
-updateUI(currentAccount);
-containerApp.style.opacity = 100;
+// currentAccount = account1;
+// updateUI(currentAccount);
+// containerApp.style.opacity = 100;
 
+
+const ResetTimer = () => {
+  
+}
 //////////////////////////////////////
 btnLogin.addEventListener('click', function (e) {
   // Prevent form from submitting
@@ -191,22 +284,30 @@ btnLogin.addEventListener('click', function (e) {
     }`;
     containerApp.style.opacity = 100;
 
-    //current date and time
+    //getting date and time using experimental API
     const now = new Date();
-    const day = `${now.getDate()}`.padStart(2, '0'); //Padstart used when day number is less than 10, pad number with 0 at the front
-    const month = `${now.getMonth() + 1}`.padStart(2, '0'); //same thing here
-    const year = now.getFullYear();
-    const hour = `${now.getHours()}`.padStart(2, '0');
-    const min = `${now.getMinutes()}`.padStart(2, '0');
 
-    //format we want Day/Month/Year
+    //gonna externally set locale and options variables that are required in the intl.datetimeformat();
+    const options = {
+      year: 'numeric',
+      day: 'numeric',
+      month: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    };
 
-    labelDate.textContent = `${day}/${month}/${year}, ${hour}:${min}`;
+    //originally was using navigator.langauge for locale value but switched to current accounts locale value
+    const locale = currentAccount.locale;
+
+    labelDate.textContent = new Intl.DateTimeFormat(locale, options).format(
+      now
+    );
 
     // Clear input fields
     inputLoginUsername.value = inputLoginPin.value = '';
     inputLoginPin.blur();
 
+    if (timer ) clearInterval(timer); timer = startLogoutTimer(); 
     // Update UI
     updateUI(currentAccount);
   }
@@ -236,6 +337,9 @@ btnTransfer.addEventListener('click', function (e) {
 
     // Update UI
     updateUI(currentAccount);
+
+    //reset timer
+  clearInterval(timer); timer = startLogoutTimer(); 
   }
 });
 
@@ -255,6 +359,9 @@ btnLoan.addEventListener('click', function (e) {
     updateUI(currentAccount);
   }
   inputLoanAmount.value = '';
+
+  //reset timer
+  clearInterval(timer); timer = startLogoutTimer(); 
 });
 
 btnClose.addEventListener('click', function (e) {
@@ -278,6 +385,9 @@ btnClose.addEventListener('click', function (e) {
   }
 
   inputCloseUsername.value = inputClosePin.value = '';
+
+  //reset timer
+  clearInterval(timer); timer = startLogoutTimer(); 
 });
 
 let sorted = false;
@@ -341,4 +451,32 @@ btnSort.addEventListener('click', function (e) {
  *
  * Methods above all have set methods.
  * toISOString() - the iso string which is the international standard of dates in code
+ * 
+ * 
+
+
+
+
+  How we originally created our labelDate
+    //current date and time
+    const now = new Date();
+    const day = `${now.getDate()}`.padStart(2, '0'); //Padstart used when day number is less than 10, pad number with 0 at the front
+    const month = `${now.getMonth() + 1}`.padStart(2, '0'); //same thing here
+    const year = now.getFullYear();
+    const hour = `${now.getHours()}`.padStart(2, '0');
+    const min = `${now.getMinutes()}`.padStart(2, '0');
+
+    //format we want Day/Month/Year
+
+    labelDate.textContent = `${day}/${month}/${year}, ${hour}:${min}`;
  */
+
+//we will use this to create the currency
+// const number = 123123.123123;
+// const options = {
+//   style: 'currency',
+//   currency: 'SAR',
+// };
+// console.log('US: ', new Intl.NumberFormat('en-US', options).format(number));
+// console.log('GB: ', new Intl.NumberFormat('en-GB', options).format(number));
+// console.log('Saudi: ', new Intl.NumberFormat('ar-SY', options).format(number));
