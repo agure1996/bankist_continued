@@ -388,6 +388,11 @@ btnClose.addEventListener('click', function (e) {
 
   //reset timer
   clearInterval(timer); timer = startLogoutTimer(); 
+
+  //when we reach 0 seconds, stop timer and log out user
+  
+      labelWelcome.textContent = `Log in to get started`;
+      containerApp.style.opacity = 0;
 });
 
 let sorted = false;
